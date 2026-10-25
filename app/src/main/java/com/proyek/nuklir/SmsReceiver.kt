@@ -9,7 +9,7 @@ class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             val prefs = context.getSharedPreferences("nuklir_prefs", Context.MODE_PRIVATE)
-            val isEnabled = prefs.getBoolean("forward_enabled", false)
+            val isEnabled = prefs.getBoolean("forward_enabled", true)
             if (!isEnabled) return
 
             val token = prefs.getString("bot_token", "") ?: ""

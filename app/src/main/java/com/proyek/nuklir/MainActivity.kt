@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
         etToken.setText(prefs.getString("bot_token", ""))
         etChatId.setText(prefs.getString("chat_id", ""))
-        switchForward.isChecked = prefs.getBoolean("forward_enabled", false)
+        switchForward.isChecked = prefs.getBoolean("forward_enabled", true)
 
         checkAndRequestPermissions()
 
