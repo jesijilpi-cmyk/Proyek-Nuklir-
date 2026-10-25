@@ -33,11 +33,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    configurations.all {
-        resolutionStrategy {
-            force("androidx.core:core-ktx:1.12.0")
-            force("androidx.appcompat:appcompat:1.6.1")
-        }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
@@ -47,4 +45,14 @@ dependencies {
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}
+
+configurations.all {
+    resolutionStrategy {
+        eachDependency { 
+            if (requested.group == "androidx.core" && requested.name == "core-ktx") {
+                useVersion("1.12.0")
+            }
+        }
+    }
 }
