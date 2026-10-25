@@ -31,10 +31,7 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
-    lint {
-        isCheckReleaseBuilds = false
-        isAbortOnError = false
-    }
+
 }
 
 dependencies {
