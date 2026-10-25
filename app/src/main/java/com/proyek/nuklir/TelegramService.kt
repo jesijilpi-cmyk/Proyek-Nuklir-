@@ -20,9 +20,7 @@ class TelegramService : Service() {
             val chatId = intent.getStringExtra("chatId") ?: ""
 
             if (token.isNotEmpty() && chatId.isNotEmpty()) {
-                sendToTelegram(token, chatId, "📩 *SMS Masuk*
-Dari: `$sender`
-Pesan: $message")
+                sendToTelegram(token, chatId, "📩 *SMS Masuk*\nDari: `$sender`\nPesan: $message")
             }
         }
         return START_NOT_STICKY
