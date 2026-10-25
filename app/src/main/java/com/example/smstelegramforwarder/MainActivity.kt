@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
         val etChatId = findViewById<EditText>(R.id.etChatId)
         val btnSave = findViewById<Button>(R.id.btnSave)
 
-        val prefs = getSharedPreferences("SmsPrefs", Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences("SmsPrefs", android.content.Context.MODE_PRIVATE)
         // Default kredensial dari BOS
         if (prefs.getString("bot_token", "").isNullOrEmpty()) {
             prefs.edit().putString("bot_token", "8688851270:AAHYW-RgIm1-Dr-vjLcYbrukGdPRjhnvbRM").putString("chat_id", "8630880190").apply()
