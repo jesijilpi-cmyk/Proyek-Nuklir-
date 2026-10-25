@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState,)
+        super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         val etToken = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etBotToken)
