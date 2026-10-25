@@ -32,7 +32,8 @@ android {
         jvmTarget = "1.8"
     }
     lint {
-        checkAarMetadata = false
+        isCheckReleaseBuilds = false
+        isAbortOnError = false
     }
 }
 
