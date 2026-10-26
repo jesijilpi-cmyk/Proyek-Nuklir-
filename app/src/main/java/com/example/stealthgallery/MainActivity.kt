@@ -11,99 +11,85 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import java.io.File
-import java.io.FileOutputStream
+import com.example.stealthgallery.R
 
-/**
- * STEALTH VAULT: Brankas Foto/Video Tersembunyi dengan Tampilan Grid Gambar
- */
-class MainActivity : AppCompatActivity() {
-    private var isVaultOpen = false
-    private lateinit var rootLayout: LinearLayout
+class MainActivity : Activity() {
     private lateinit var titleView: TextView
-    private lateinit var vaultContainer: LinearLayout
-    private lateinit var gridView: GridView
-    private lateinit var btnAddMedia: Button
-    private val vaultFolder: File
-        get() = File(filesDir, "vault_storage")
-    private var tapCount = 0
-    private var lastTapTime: Long = 0
-
-    private val pickImageLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { saveToVault(it) }
-    }
+    private lateinit var vaultContainer: View
+    private lateinit var vaultGridView: GridView
+    private lateinit var btnAdd: Button
+    private val vaultStorageDir by lazy { filesDir.parentFile?.resolve("vault_storage") ?: filesDir }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Pastikan R.layout.activity_main ada. Kita berasumsi layout ini sudah ada di res/layout/activity_main.xml
         setContentView(R.layout.activity_main)
-        
-        titleView = findViewById(R.id.title_view)
+
+        titleView = findViewById(R.id.app_title)
         vaultContainer = findViewById(R.id.vault_container)
-        gridView = findViewById(R.id.grid_view)
-        btnAddMedia = findViewById(R.id.btn_add_media)
-        
-        btnAddMedia.setOnClickListener { checkPermissionAndOpenGallery() }
-        titleView.setOnClickListener { handleTripleTap() }
+        vaultGridView = findViewById(R.id.vault_grid_view)
+        btnAdd = findViewById(R.id.btn_add_photo)
+
+        // Penyamaran: Judul "System Tools"
+        titleView.setOnClickListener(object : View.OnClickListener {
+            private var tapCount = 0
+            override fun onClick(v: View?) {
+                tapCount++
+                if (tapCount >= 3) {
+                    tapCount = 0
+                    showVault()
+                }
+            }
+        })
+
+        btnAdd.setOnClickListener {
+            openGallery()
+        }
+
+        // Mode awal: Tampilan sistem palsu
+        showSystemUI()
     }
 
-    private fun handleTripleTap() {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastTapTime > 1000) {
-            tapCount = 0
+    private fun showSystemUI() {
+        vaultContainer.visibility = View.GONE
+        btnAdd.visibility = View.GONE
+        titleView.text = "System Tools"
+    }
+
+    private fun showVault() {
+        vaultContainer.visibility = View.VISIBLE
+        btnAdd.visibility = View.VISIBLE
+        titleView.text = "Stealth Vault"
+        loadVaultImages()
+    }
+
+    private fun openGallery() {
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = "image/*"
         }
-        tapCount++
-        lastTapTime = currentTime
-        if (tapCount == 3) {
-            toggleVault()
-            tapCount = 0
+        startActivityForResult(intent, 100)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 100 && resultCode == Activity.RESULT_OK && data != null) {
+            val uri: Uri? = data.data
+            uri?.let { saveFileToVault(it) }
         }
     }
 
-    private fun toggleVault() {
-        isVaultOpen = !isVaultOpen
-        if (isVaultOpen) {
-            titleView.text = "Secure Vault"
-            vaultContainer.visibility = View.VISIBLE
-            loadVaultImages()
-            Toast.makeText(this, "Vault Dibuka", Toast.LENGTH_SHORT).show()
-        } else {
-            titleView.text = "System Tools"
-            vaultContainer.visibility = View.GONE
-            Toast.makeText(this, "Vault Dikunci", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun checkPermissionAndOpenGallery() {
-        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-        if (ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED) {
-            pickImageLauncher.launch("image/*")
-        } else {
-            ActivityCompat.requestPermissions(this, arrayOf(perm), 102)
-        }
-    }
-
-    private fun saveToVault(sourceUri: Uri) {
+    private fun saveFileToVault(uri: Uri) {
         try {
+            val inputStream = contentResolver.openInputStream(uri)
             val fileName = "vault_${System.currentTimeMillis()}.jpg"
-            val targetFile = File(vaultFolder, fileName)
-            vaultFolder.mkdirs()
-            contentResolver.openInputStream(sourceUri)?.use { input ->
-                FileOutputStream(targetFile).use { output ->
+            val file = java.io.File(vaultStorageDir, fileName)
+            
+            inputStream?.use { input ->
+                file.outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
-            Toast.makeText(this, "Foto berhasil dimasukkan ke brankas!", Toast.LENGTH_SHORT).show()
+            
+            Toast.makeText(this, "Foto disimpan ke brankas!", Toast.LENGTH_SHORT).show()
             loadVaultImages()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -112,33 +98,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadVaultImages() {
-        val files = vaultFolder.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
-            ?.sortedByDescending { it.lastModified() } ?: emptyList()
-        val adapter = ImageAdapter(files)
-        gridView.adapter = adapter
-        gridView.setOnItemClickListener { _, _, position, _ ->
-            val file = files[position]
-            val intent = Intent(this, FullImageActivity::class.java).apply {
-                putExtra("image_path", file.absolutePath)
-            }
-            startActivity(intent)
-        }
+        val files = vaultStorageDir.listFiles()?.filter { it.isFile && (it.name.endsWith(".jpg") || it.name.endsWith(".png")) } ?: emptyList()
+        val adapter = ImageAdapter(this, files)
+        vaultGridView.adapter = adapter
     }
 
-    private inner class ImageAdapter(private val imageFiles: List<File>) : BaseAdapter() {
-        override fun getCount(): Int = imageFiles.size
-        override fun getItem(position: Int): Any = imageFiles[position]
+    // Adapter untuk menampilkan Grid Gambar
+    private inner class ImageAdapter(private val context: Activity, private val files: List<java.io.File>) : BaseAdapter() {
+        override fun getCount(): Int = files.size
+        override fun getItem(position: Int): Any = files[position]
         override fun getItemId(position: Int): Long = position.toLong()
+
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val imageView: ImageView = convertView as? ImageView ?: ImageView(this@MainActivity).apply {
-                layoutParams = AbsListView.LayoutParams(300, 300)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setPadding(4, 4, 4, 4)
+            val imageView: ImageView
+            val view: View
+            
+            if (convertView == null) {
+                view = LinearLayout(context).apply {
+                    layoutParams = GridView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 300)
+                    setPadding(8, 8, 8, 8)
+                }
+                imageView = ImageView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                }
+                view.addView(imageView)
+            } else {
+                view = convertView
+                imageView = view.getChildAt(0) as ImageView
             }
-            val file = imageFiles[position]
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-            imageView.setImageBitmap(bitmap)
-            return imageView
+
+            val file = files[position]
+            try {
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                imageView.setImageBitmap(bitmap)
+            } catch (e: Exception) {
+                imageView.setImageResource(android.R.drawable.ic_menu_report_image)
+            }
+
+            // Handle klik gambar untuk buka Full Screen
+            view.setOnClickListener {
+                val intent = Intent(context, FullImageActivity::class.java)
+                intent.putExtra("image_path", file.absolutePath)
+                context.startActivity(intent)
+            }
+
+            return view
         }
     }
 }
