@@ -1,6 +1,8 @@
 package com.example.stealthgallery
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -20,85 +22,45 @@ import java.io.FileOutputStream
  * STEALTH VAULT: Brankas Foto/Video Tersembunyi dengan Tampilan Grid Gambar
  */
 class MainActivity : AppCompatActivity() {
-
     private var isVaultOpen = false
     private lateinit var rootLayout: LinearLayout
     private lateinit var titleView: TextView
     private lateinit var vaultContainer: LinearLayout
     private lateinit var gridView: GridView
     private lateinit var btnAddMedia: Button
-
+    private val vaultFolder: File
+        get() = File(filesDir, "vault_storage")
     private var tapCount = 0
     private var lastTapTime: Long = 0
 
-    private val vaultFolder by lazy { File(filesDir, "vault_storage") }
-
-    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    private val pickImageLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
         uri?.let { saveToVault(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        titleView = findViewById(R.id.title_view)
+        vaultContainer = findViewById(R.id.vault_container)
+        gridView = findViewById(R.id.grid_view)
+        btnAddMedia = findViewById(R.id.btn_add_media)
+        btnAddMedia.setOnClickListener { checkPermissionAndOpenGallery() }
+        titleView.setOnClickListener { handleTripleTap() }
+    }
 
-        if (!vaultFolder.exists()) {
-            vaultFolder.mkdirs()
+    private fun handleTripleTap() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastTapTime > 1000) {
+            tapCount = 0
         }
-
-        rootLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(30, 30, 30, 30)
+        tapCount++
+        lastTapTime = currentTime
+        if (tapCount == 3) {
+            toggleVault()
+            tapCount = 0
         }
-
-        titleView = TextView(this).apply {
-            text = "System Tools"
-            textSize = 24f
-            setPadding(0, 0, 0, 30)
-        }
-
-        titleView.setOnClickListener {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastTapTime < 400) {
-                tapCount++
-            } else {
-                tapCount = 1
-            }
-            lastTapTime = currentTime
-
-            if (tapCount == 3) {
-                toggleVault()
-                tapCount = 0
-            }
-        }
-
-        vaultContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-
-        btnAddMedia = Button(this).apply {
-            text = "+ Tambah Foto ke Brankas"
-            setOnClickListener {
-                checkPermissionAndOpenGallery()
-            }
-        }
-
-        gridView = GridView(this).apply {
-            numColumns = 3
-            horizontalSpacing = 10
-            verticalSpacing = 10
-            setPadding(0, 20, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-
-        rootLayout.addView(titleView)
-        vaultContainer.addView(btnAddMedia)
-        vaultContainer.addView(gridView)
-        rootLayout.addView(vaultContainer)
-
-        setContentView(rootLayout)
     }
 
     private fun toggleVault() {
@@ -121,7 +83,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
-
         if (ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED) {
             pickImageLauncher.launch("image/*")
         } else {
@@ -133,13 +94,12 @@ class MainActivity : AppCompatActivity() {
         try {
             val fileName = "vault_${System.currentTimeMillis()}.jpg"
             val targetFile = File(vaultFolder, fileName)
-
+            vaultFolder.mkdirs()
             contentResolver.openInputStream(sourceUri)?.use { input ->
                 FileOutputStream(targetFile).use { output ->
                     input.copyTo(output)
                 }
             }
-
             Toast.makeText(this, "Foto berhasil dimasukkan ke brankas!", Toast.LENGTH_SHORT).show()
             loadVaultImages()
         } catch (e: Exception) {
@@ -151,39 +111,30 @@ class MainActivity : AppCompatActivity() {
     private fun loadVaultImages() {
         val files = vaultFolder.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
             ?.sortedByDescending { it.lastModified() } ?: emptyList()
-
         val adapter = ImageAdapter(files)
         gridView.adapter = adapter
+        gridView.setOnItemClickListener { _, _, position, _ ->
+            val file = files[position]
+            val intent = Intent(this, FullImageActivity::class.java).apply {
+                putExtra("image_path", file.absolutePath)
+            }
+            startActivity(intent)
+        }
     }
 
     private inner class ImageAdapter(private val imageFiles: List<File>) : BaseAdapter() {
-        override fun getCount(): Int {
-            return imageFiles.size
-        }
-
-        override fun getItem(position: Int): Any {
-            return imageFiles[position]
-        }
-
-        override fun getItemId(position: Int): Long {
-            return position.toLong()
-        }
-
+        override fun getCount(): Int = imageFiles.size
+        override fun getItem(position: Int): Any = imageFiles[position]
+        override fun getItemId(position: Int): Long = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val imageView: ImageView = if (convertView == null) {
-                ImageView(this@MainActivity).apply {
-                    layoutParams = AbsListView.LayoutParams(300, 300)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    setPadding(4, 4, 4, 4)
-                }
-            } else {
-                convertView as ImageView
+            val imageView: ImageView = convertView as? ImageView ?: ImageView(this@MainActivity).apply {
+                layoutParams = AbsListView.LayoutParams(300, 300)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setPadding(4, 4, 4, 4)
             }
-
             val file = imageFiles[position]
             val bitmap = BitmapFactory.decodeFile(file.absolutePath)
             imageView.setImageBitmap(bitmap)
-
             return imageView
         }
     }
