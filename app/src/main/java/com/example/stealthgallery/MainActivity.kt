@@ -1,151 +1,170 @@
 package com.example.stealthgallery
 
 import android.Manifest
+import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.ListView
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.io.File
+import java.io.FileOutputStream
 
+/**
+ * STEALTH VAULT: Brankas Foto/Video Tersembunyi
+ * Fitur:
+ * 1. Penyamaran: Tampilan default "System Tools".
+ * 2. Vault: Foto/Video disalin ke folder privat internal (app-specific).
+ * 3. Keamanan: File tidak akan terlihat di Gallery/Google Photos biasa.
+ * 4. Akses: Klik 3x pada judul untuk masuk ke Vault.
+ */
 class MainActivity : AppCompatActivity() {
 
-    private var isGalleryMode = false
-    private lateinit var container: View
+    private var isVaultOpen = false
+    private lateinit var rootLayout: LinearLayout
     private lateinit var titleView: TextView
-    private lateinit var listView: ListView
+    private lateinit var vaultContainer: LinearLayout
+    private lateinit var mediaListView: ListView
+    private lateinit var btnAddMedia: Button
 
-    private val PERMISSION_REQUEST_CODE = 100
+    private var tapCount = 0
+    private var lastTapTime: Long = 0
+
+    // Folder internal untuk menyimpan file secara privat
+    private val vaultFolder by lazy { File(filesDir, "vault_storage") }
+
+    // Handler untuk memilih media dari Galeri/File Picker
+    private val pickMediaLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { saveToVault(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Setup basic layout programmatically
-        val root = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT
-            )
+
+        // Inisialisasi folder vault
+        if (!vaultFolder.exists()) {
+            vaultFolder.mkdirs()
+        }
+
+        // Layout Utama (Programmatic)
+        rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 40, 40, 40)
         }
 
         titleView = TextView(this).apply {
             text = "System Tools"
             textSize = 24f
-            setPadding(48, 48, 48, 48)
-            setOnClickListener { handleSecretTrigger() }
+            setPadding(0, 0, 0, 40)
         }
 
-        listView = ListView(this)
-        listView.visibility = View.GONE
+        // Listener ketukan 3x untuk membuka Vault
+        titleView.setOnClickListener {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastTapTime < 400) {
+                tapCount++
+            } else {
+                tapCount = 1
+            }
+            lastTapTime = currentTime
 
-        root.addView(titleView)
-        root.addView(listView)
-        setContentView(root)
-
-        container = root
-    }
-
-    private fun handleSecretTrigger() {
-        // Simple trigger: Tap the title 3 times
-        // In a real app, this might be a long press or a specific sequence
-        if (!isGalleryMode) {
-            Toast.makeText(this, "System Tools v1.0.2", Toast.LENGTH_SHORT).show()
-            // For demo purposes, we'll just toggle it on a long click or double tap
-            // Let's use a simple toggle for now
-            toggleGalleryMode()
-        } else {
-            toggleGalleryMode()
-        }
-    }
-
-    // Overriding click listener for triple tap simulation (simplified)
-    // In a real implementation, use a GestureDetector
-    private var tapCount = 0
-    private var lastTapTime: Long = 0
-
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastTapTime < 300) {
-            tapCount++
-        } else {
-            tapCount = 1
-        }
-        lastTapTime = currentTime
-
-        if (tapCount == 3) {
-            toggleGalleryMode()
-            tapCount = 0
-        }
-    }
-
-    private fun toggleGalleryMode() {
-        isGalleryMode = !isGalleryMode
-        if (isGalleryMode) {
-            titleView.text = "Stealth Gallery"
-            listView.visibility = View.VISIBLE
-            checkPermissionsAndLoadMedia()
-        } else {
-            titleView.text = "System Tools"
-            listView.visibility = View.GONE
-            Toast.makeText(this, "Back to System Tools", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun checkPermissionsAndLoadMedia() {
-        val permissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-
-        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
-            loadMedia()
-        } else {
-            ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            loadMedia()
-        } else {
-            Toast.makeText(this, "Permission denied. Cannot load media.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun loadMedia() {
-        val mediaList = mutableListOf<String>()
-        val projection = arrayOf(MediaStore.Files.FileColumns.DISPLAY_NAME)
-        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE} OR " +
-                "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
-
-        contentResolver.query(
-            MediaStore.Files.getContentUri("external"),
-            projection,
-            selection,
-            null,
-            "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
-        )?.use { cursor ->
-            val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
-            while (cursor.moveToNext()) {
-                mediaList.add(cursor.getString(nameColumn))
+            if (tapCount == 3) {
+                toggleVault()
+                tapCount = 0
             }
         }
 
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mediaList)
-        listView.adapter = adapter
+        // Container untuk Vault (Hidden by default)
+        vaultContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+
+        btnAddMedia = Button(this).apply {
+            text = "Add Photo/Video to Vault"
+            setOnClickListener {
+                // Periksa izin sebelum memilih
+                val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+                } else {
+                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+                if (perms.all { ContextCompat.checkSelfPermission(this@MainActivity, it) == PackageManager.PERMISSION_GRANTED }) {
+                    pickMediaLauncher.launch("*/*")
+                } else {
+                    ActivityCompat.requestPermissions(this@MainActivity, perms, 101)
+                }
+            }
+        }
+
+        mediaListView = ListView(this)
+
+        // Susun UI
+        rootLayout.addView(titleView)
+        vaultContainer.addView(btnAddMedia)
+        vaultContainer.addView(mediaListView)
+        rootLayout.addView(vaultContainer)
+        setContentView(rootLayout)
+    }
+
+    private fun toggleVault() {
+        isVaultOpen = !isVaultOpen
+        if (isVaultOpen) {
+            titleView.text = "Secure Vault"
+            vaultContainer.visibility = View.VISIBLE
+            loadVaultMedia()
+            Toast.makeText(this, "Vault Unlocked", Toast.LENGTH_SHORT).show()
+        } else {
+            titleView.text = "System Tools"
+            vaultContainer.visibility = View.GONE
+            Toast.makeText(this, "Vault Locked", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveToVault(sourceUri: Uri) {
+        try {
+            val contentResolver = this.contentResolver
+            val fileName = "vault_${System.currentTimeMillis()}"
+            
+            // Mencoba menebak tipe MIME
+            val mimeType = contentResolver.getType(sourceUri) ?: "application/octet-stream"
+            val extension = when {
+                mimeType.contains("image") -> "jpg"
+                mimeType.contains("video") -> "mp4"
+                else -> "dat"
+            }
+            val targetFile = File(vaultFolder, "$fileName.$extension")
+
+            contentResolver.openInputStream(sourceUri)?.use { input ->
+                FileOutputStream(targetFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            Toast.makeText(this, "Saved to Vault!", Toast.LENGTH_SHORT).show()
+            loadVaultMedia() // Refresh list
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Error saving file", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun loadVaultMedia() {
+        val files = vaultFolder.listFiles()
+        val fileNames = files?.map { it.name } ?: listOf()
+
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, fileNames)
+        mediaListView.adapter = adapter
         
-        if (mediaList.isEmpty()) {
-            Toast.makeText(this, "No media found.", Toast.LENGTH_SHORT).show()
+        if (fileNames.isEmpty()) {
+            Toast.makeText(this, "Vault is empty", Toast.LENGTH_SHORT).show()
         }
     }
 }
