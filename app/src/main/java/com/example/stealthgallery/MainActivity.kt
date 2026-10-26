@@ -42,45 +42,54 @@ class MainActivity : Activity() {
         })
 
         btnAdd.setOnClickListener {
-            openGallery()
+            requestStoragePermission()
+        }
+    }
+
+    private fun requestStoragePermission() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
-        // Mode awal: Tampilan sistem palsu
-        showSystemUI()
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            openGallery()
+        } else {
+            requestPermissions(arrayOf(permission), 100)
+        }
     }
 
-    private fun showSystemUI() {
-        vaultContainer.visibility = View.GONE
-        btnAdd.visibility = View.GONE
-        titleView.text = "System Tools"
-    }
-
-    private fun showVault() {
-        vaultContainer.visibility = View.VISIBLE
-        btnAdd.visibility = View.VISIBLE
-        titleView.text = "Stealth Vault"
-        loadVaultImages()
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openGallery()
+        } else {
+            Toast.makeText(this, "Izin diperlukan untuk akses galeri", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun openGallery() {
         val intent = Intent(Intent.ACTION_PICK).apply {
             type = "image/*"
         }
-        startActivityForResult(intent, 100)
+        startActivityForResult(intent, 200)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 100 && resultCode == Activity.RESULT_OK && data != null) {
-            val uri: Uri? = data.data
-            uri?.let { saveFileToVault(it) }
+        if (requestCode == 200 && resultCode == Activity.RESULT_OK && data != null) {
+            val uri = data.data
+            uri?.let { saveToVault(it) }
         }
     }
 
-    private fun saveFileToVault(uri: Uri) {
+    private fun saveToVault(uri: Uri) {
         try {
+            if (!vaultStorageDir.exists()) vaultStorageDir.mkdirs()
+            
             val inputStream = contentResolver.openInputStream(uri)
-            val fileName = "vault_${System.currentTimeMillis()}.jpg"
+            val fileName = "IMG_${System.currentTimeMillis()}.jpg"
             val file = java.io.File(vaultStorageDir, fileName)
             
             inputStream?.use { input ->
@@ -89,61 +98,63 @@ class MainActivity : Activity() {
                 }
             }
             
-            Toast.makeText(this, "Foto disimpan ke brankas!", Toast.LENGTH_SHORT).show()
-            loadVaultImages()
+            Toast.makeText(this, "Foto berhasil dikunci!", Toast.LENGTH_SHORT).show()
+            showVault()
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Gagal menyimpan foto", Toast.LENGTH_SHORT).show()
         }
     }
 
+    private fun showVault() {
+        vaultContainer.visibility = View.VISIBLE
+        loadVaultImages()
+    }
+
     private fun loadVaultImages() {
-        val files = vaultStorageDir.listFiles()?.filter { it.isFile && (it.name.endsWith(".jpg") || it.name.endsWith(".png")) } ?: emptyList()
-        val adapter = ImageAdapter(this, files)
+        val files = vaultStorageDir.listFiles()?.filter { it.isFile } ?: emptyList()
+        val imageUris = files.map { Uri.fromFile(it) }
+
+        val adapter = ImageAdapter(this, imageUris)
         vaultGridView.adapter = adapter
     }
 
-    // Adapter untuk menampilkan Grid Gambar
-    private inner class ImageAdapter(private val context: Activity, private val files: List<java.io.File>) : BaseAdapter() {
-        override fun getCount(): Int = files.size
-        override fun getItem(position: Int): Any = files[position]
+    inner class ImageAdapter(private val context: Activity, private val uris: List<Uri>) : BaseAdapter() {
+        override fun getCount(): Int = uris.size
+        override fun getItem(position: Int): Any = uris[position]
         override fun getItemId(position: Int): Long = position.toLong()
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val imageView: ImageView
-            val view: View
-            
-            if (convertView == null) {
-                view = LinearLayout(context).apply {
-                    layoutParams = GridView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 300)
-                    setPadding(8, 8, 8, 8)
-                }
-                imageView = ImageView(context).apply {
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                }
-                view.addView(imageView)
-            } else {
-                view = convertView
-                imageView = view.getChildAt(0) as ImageView
+            val imageView: ImageView = (convertView as? ImageView) ?: ImageView(context).apply {
+                layoutParams = GridView.LayoutParams(Gridview_column_width(), Gridview_column_height())
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setPadding(4, 4, 4, 4)
             }
 
-            val file = files[position]
+            val uri = uris[position]
             try {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                imageView.setImageBitmap(bitmap)
+                imageView.setImageBitmap(BitmapFactory.decodeFile(java.io.File(uri.path!!).absolutePath))
             } catch (e: Exception) {
-                imageView.setImageResource(android.R.drawable.ic_menu_report_image)
+                imageView.setImageResource(android.R.drawable.ic_menu_gallery)
             }
 
-            // Handle klik gambar untuk buka Full Screen
-            view.setOnClickListener {
+            imageView.setOnClickListener {
                 val intent = Intent(context, FullImageActivity::class.java)
-                intent.putExtra("image_path", file.absolutePath)
+                intent.putExtra("image_uri", uri.toString())
                 context.startActivity(intent)
             }
 
-            return view
+            return imageView
+        }
+
+        private fun Gridview_column_width(): Int {
+            val displayMetrics = context.resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            return screenWidth / 3 - 12
+        }
+
+        private fun Gridview_column_height(): Int {
+            return (Gridview_column_width() * 1.3).toInt()
         }
     }
 }
