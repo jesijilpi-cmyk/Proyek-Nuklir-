@@ -6,3 +6,4 @@ pluginManagement {
     }
 }
 rootProject.name = "Proyek-Nuklir-"
+include(":app")
