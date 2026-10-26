@@ -13,4 +13,25 @@
         android:textSize="24sp"
         android:textStyle="bold"
         android:gravity="center" />
+    <LinearLayout
+        android:id="@+id/vault_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+        <Button
+            android:id="@+id/btn_add_photo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tambah Foto ke Brankas"
+            android:layout_gravity="center_horizontal" />
+        <GridView
+            android:id="@+id/vault_grid_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:numColumns="3"
+            android:verticalSpacing="8dp"
+            android:horizontalSpacing="8dp"
+            android:stretchMode="columnWidth" />
+    </LinearLayout>
 </LinearLayout>
