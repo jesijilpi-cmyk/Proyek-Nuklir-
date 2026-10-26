@@ -41,11 +41,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Pastikan R.layout.activity_main ada. Kita berasumsi layout ini sudah ada di res/layout/activity_main.xml
         setContentView(R.layout.activity_main)
+        
         titleView = findViewById(R.id.title_view)
         vaultContainer = findViewById(R.id.vault_container)
         gridView = findViewById(R.id.grid_view)
         btnAddMedia = findViewById(R.id.btn_add_media)
+        
         btnAddMedia.setOnClickListener { checkPermissionAndOpenGallery() }
         titleView.setOnClickListener { handleTripleTap() }
     }
