@@ -33,7 +33,6 @@ class MainActivity : AppCompatActivity() {
 
     private val vaultFolder by lazy { File(filesDir, "vault_storage") }
 
-    // Langsung buka galeri foto HP untuk memilih gambar
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { saveToVault(it) }
     }
@@ -157,11 +156,18 @@ class MainActivity : AppCompatActivity() {
         gridView.adapter = adapter
     }
 
-    // Adapter kustom untuk menampilkan gambar dalam Grid
     private inner class ImageAdapter(private val imageFiles: List<File>) : BaseAdapter() {
-        override fun getCount(): int = imageFiles.size
-        override fun getItem(position: Int): Any = imageFiles[position]
-        override fun getItemId(position: Int): Long = position.toLong()
+        override fun getCount(): Int {
+            return imageFiles.size
+        }
+
+        override fun getItem(position: Int): Any {
+            return imageFiles[position]
+        }
+
+        override fun getItemId(position: Int): Long {
+            return position.toLong()
+        }
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val imageView: ImageView = if (convertView == null) {
